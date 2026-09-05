@@ -31,6 +31,8 @@ TyranoScript V6 の新規プロジェクトを自動作成する Windows PowerSh
 
 取得したパッケージは既定で `%LOCALAPPDATA%\tyrano-init\cache` に保存します。同じ公式ダウンロードURLの有効なZIPファイルがキャッシュにあれば、次回以降の作成時は再ダウンロードせずに利用します。`-Refresh` を付けて実行すると、キャッシュを使わずにパッケージを再取得します。
 
+## 作成後の操作
+
 作成後、[TyranoStudio V6](https://tyrano.jp/dl/v6) を別途入手し、プロジェクト内の `index.html` を選択してください。
 
 ## 開発者向けテスト
