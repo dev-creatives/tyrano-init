@@ -179,10 +179,12 @@ function New-TyranoForm {
     $nameBox = New-Object Windows.Forms.TextBox; $nameBox.Name = 'projectNameBox'; $nameBox.Location = New-Object Drawing.Point(170, 98); $nameBox.Width = 390; $nameBox.Text = $InitialProjectName
     $label4 = New-Object Windows.Forms.Label; $label4.Text = '作成先フォルダー'; $label4.Location = New-Object Drawing.Point(20, 142); $label4.AutoSize = $true
     $destBox = New-Object Windows.Forms.TextBox; $destBox.Name = 'destinationBox'; $destBox.Location = New-Object Drawing.Point(170, 138); $destBox.Width = 310; $destBox.Text = $defaultDestination
-    $browse = New-Object Windows.Forms.Button; $browse.Name = 'browseButton'; $browse.Text = '参照…'; $browse.Location = New-Object Drawing.Point(490, 136); $browse.Add_Click({ $dialog = New-Object Windows.Forms.FolderBrowserDialog; if ($dialog.ShowDialog() -eq 'OK') { $destBox.Text = $dialog.SelectedPath } })
+    $browse = New-Object Windows.Forms.Button; $browse.Name = 'browseButton'; $browse.Text = '参照…'; $browse.Location = New-Object Drawing.Point(490, 136)
+    $browse.Add_Click(({ $dialog = New-Object Windows.Forms.FolderBrowserDialog; if ($dialog.ShowDialog() -eq 'OK') { $destBox.Text = $dialog.SelectedPath } }).GetNewClosure())
     $status = New-Object Windows.Forms.Label; $status.Text = '必要項目を入力してください。'; $status.Location = New-Object Drawing.Point(20, 185); $status.Size = New-Object Drawing.Size(540, 45)
     $run = New-Object Windows.Forms.Button; $run.Name = 'createButton'; $run.Text = '作成'; $run.Location = New-Object Drawing.Point(450, 250); $run.Width = 110
-    $run.Add_Click({ param($sender, $eventArgs); try { $sender.Enabled = $false; $status.Text = '処理中…'; $result = New-TyranoProject -Id $idBox.Text -Title $nameBox.Text -Directory $directoryBox.Text -ParentDirectory $destBox.Text -Progress { param($m) $status.Text = $m; [Windows.Forms.Application]::DoEvents() }; [Windows.Forms.MessageBox]::Show("作成しました。`n$($result.Path)\index.html", '完了'); $form.Close() } catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'エラー', 'OK', 'Error') } finally { $sender.Enabled = $true } })
+    $runHandler = { param($sender, $eventArgs); try { $sender.Enabled = $false; $status.Text = '処理中…'; $progress = { param($m) $status.Text = $m; [Windows.Forms.Application]::DoEvents() }.GetNewClosure(); $result = New-TyranoProject -Id $idBox.Text -Title $nameBox.Text -Directory $directoryBox.Text -ParentDirectory $destBox.Text -Progress $progress; [Windows.Forms.MessageBox]::Show("作成しました。`n$($result.Path)\index.html", '完了'); $form.Close() } catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'エラー', 'OK', 'Error') } finally { $sender.Enabled = $true } }.GetNewClosure()
+    $run.Add_Click($runHandler)
     $form.AcceptButton = $run
     $form.Controls.AddRange(@($label1, $idBox, $label2, $directoryBox, $label3, $nameBox, $label4, $destBox, $browse, $status, $run))
     return $form
