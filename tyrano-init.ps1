@@ -38,7 +38,8 @@ function Get-ProjectSourceDirectory {
 
 function Write-ProjectGitIgnore {
     param([string]$ProjectDirectory)
-    $content = @('# OS metadata', 'Thumbs.db', 'desktop.ini', '.DS_Store', '', '# Editor-local settings', '.vscode/', '.idea/', '') -join [Environment]::NewLine
+    # .gitignore is a cross-platform repository file; always emit LF.
+    $content = @('# OS metadata', 'Thumbs.db', 'desktop.ini', '.DS_Store', '', '# Editor-local settings', '.vscode/', '.idea/', '') -join "`n"
     [IO.File]::WriteAllText((Join-Path $ProjectDirectory '.gitignore'), $content, (New-Object Text.UTF8Encoding($false)))
 }
 

@@ -12,5 +12,7 @@ Set-Content -LiteralPath (Join-Path $src 'index.html') -Value '<html />' -Encodi
 $target = Join-Path $tmp 'out'; Copy-DirectoryContents $src $target; Write-ProjectGitIgnore $target
 Assert (Test-Path (Join-Path $target 'index.html')) 'index.htmlの配置'
 Assert ((Get-Content (Join-Path $target '.gitignore') -Raw) -match 'Thumbs.db') '.gitignoreの内容'
+$gitignoreBytes = [IO.File]::ReadAllBytes((Join-Path $target '.gitignore'))
+Assert (-not ([Text.Encoding]::UTF8.GetString($gitignoreBytes) -match "`r`n")) '.gitignoreがLFであること'
 Remove-Item $tmp -Recurse -Force
 Write-Host 'PASS: すべてのテストに成功しました。' -ForegroundColor Green
