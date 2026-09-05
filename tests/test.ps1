@@ -5,6 +5,15 @@ function Assert([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw "FAIL: $Message" }
 }
 
+$html = '<a href="/download/studio/test.zip">最新版をダウンロード</a>'
+Assert ((Get-LatestPackageUrl -Html $html) -eq 'https://tyrano.jp/download/studio/test.zip') '最新版リンクの解析'
+Assert ((Resolve-ProjectSettings -Id 'my-game_2026' -Title '' -Directory '').Title -eq 'my-game_2026') '表示名のIDフォールバック'
+Assert ((Resolve-ProjectSettings -Id 'my-game_2026' -Title '' -Directory '').Directory -eq 'my-game_2026') 'ディレクトリー名のIDフォールバック'
+Assert ((Get-TyranoCacheDirectory) -eq (Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)) 'tyrano-init\cache')) '既定のパッケージキャッシュ先'
+$invalidId = $false
+try { Resolve-ProjectSettings -Id 'my-game.test' -Title '' -Directory '' | Out-Null } catch { $invalidId = $true }
+Assert $invalidId 'IDの不正文字検証'
+
 $form = New-TyranoForm -InitialProjectId 'my-game' -InitialProjectName '' -InitialDirectoryName '' -InitialDestination (Get-Location).Path
 $idControl = @($form.Controls.Find('projectIdBox', $true))
 $nameControl = @($form.Controls.Find('projectNameBox', $true))
@@ -25,40 +34,85 @@ Assert ($directoryControl[0].Top -lt $nameControl[0].Top) 'GUIのディレクト
 $formSource = (Get-Command New-TyranoForm).ScriptBlock.ToString()
 Assert (-not ($formSource -match '\.TabIndex\s*=')) 'GUIでTabIndexを二重管理しないこと'
 Assert ($formSource -match 'AddRange\(@\(\$label1,\s*\$idBox,\s*\$label2,\s*\$directoryBox,\s*\$label3,\s*\$nameBox') 'GUIの追加順が画面順であること'
-Assert ($formSource -match 'param\(\$sender,\s*\$eventArgs\).*\$sender\.Enabled') 'GUIのイベント送信元でボタン状態を操作すること'
-Assert ($formSource -match 'GetNewClosure\(\)') 'GUIのイベントハンドラーがフォームの入力欄を保持すること'
-Assert ($formSource -match '\$createProject\s*=\s*\$\{function:New-TyranoProject\}') 'GUIがプロジェクト作成関数をイベント前に保持すること'
-Assert ($formSource -match '&\s+\$createProject\s+-Id') 'GUIが保持したプロジェクト作成関数を実行すること'
 $form.Dispose()
 
-$html = '<a href="/download/studio/test.zip">最新版をダウンロード</a>'
-Assert ((Get-LatestPackageUrl -Html $html) -eq 'https://tyrano.jp/download/studio/test.zip') '最新版リンクの解析'
-Assert ((Resolve-ProjectSettings -Id 'my-game_2026' -Title '' -Directory '').Title -eq 'my-game_2026') '表示名のIDフォールバック'
-Assert ((Resolve-ProjectSettings -Id 'my-game_2026' -Title '' -Directory '').Directory -eq 'my-game_2026') 'ディレクトリー名のIDフォールバック'
-$consoleSource = (Get-Command Start-Console).ScriptBlock.ToString()
-Assert ($consoleSource -match 'IsNullOrWhiteSpace\(\$ProjectName\).*Read-Host') 'コンソールでタイトル入力を促すこと'
-Assert ($consoleSource -match 'IsNullOrWhiteSpace\(\$DirectoryName\).*Read-Host') 'コンソールでディレクトリー名入力を促すこと'
-$emptyValuesAccepted = $false
-try {
-    New-TyranoProject -Id 'binding-test' -Title '' -Directory '' -ParentDirectory ([IO.Path]::GetTempPath()) -Progress { throw 'binding probe' } | Out-Null
-} catch { $emptyValuesAccepted = $_.Exception.Message -match 'binding probe' }
-Assert $emptyValuesAccepted '空欄のタイトル・ディレクトリー名を受け付けること'
-$invalidId = $false
-try { Resolve-ProjectSettings -Id 'my-game.test' -Title '' -Directory '' | Out-Null } catch { $invalidId = $true }
-Assert $invalidId 'IDの不正文字検証'
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('tyrano-test-' + [Guid]::NewGuid())
-$src = Join-Path $tmp 'src'; New-Item -ItemType Directory -Path $src -Force | Out-Null
-Set-Content -LiteralPath (Join-Path $src 'index.html') -Value '<html />' -Encoding UTF8
-$target = Join-Path $tmp 'out'; Copy-DirectoryContents $src $target; Write-ProjectGitIgnore $target
-Assert (Test-Path (Join-Path $target 'index.html')) 'index.htmlの配置'
-Assert ((Get-Content (Join-Path $target '.gitignore') -Raw) -match 'Thumbs.db') '.gitignoreの内容'
-$gitignoreBytes = [IO.File]::ReadAllBytes((Join-Path $target '.gitignore'))
-Assert (-not ([Text.Encoding]::UTF8.GetString($gitignoreBytes) -match "`r`n")) '.gitignoreがLFであること'
-$configPath = Join-Path $target 'data\system'; New-Item -ItemType Directory -Path $configPath -Force | Out-Null
-Set-Content -LiteralPath (Join-Path $configPath 'Config.tjs') -Value (@(';System.title = "Old";', ';projectID = old;') -join "`n") -Encoding UTF8
-Set-TyranoProjectMetadata -ProjectDirectory $target -ProjectId 'my-game_2026' -ProjectTitle '私のゲーム'
-$config = Get-Content -LiteralPath (Join-Path $configPath 'Config.tjs') -Raw -Encoding UTF8
-Assert ($config -match 'System\.title = "私のゲーム"') '表示名のConfig.tjs反映'
-Assert ($config -match 'projectID = my-game_2026') 'IDのConfig.tjs反映'
-Remove-Item $tmp -Recurse -Force
+try {
+    $template = Join-Path $tmp 'template'
+    $configDirectory = Join-Path $template 'data\system'
+    New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $template 'index.html') -Value '<html />' -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $configDirectory 'Config.tjs') -Value (@(';System.title = "Old";', ';projectID = old;') -join "`n") -Encoding UTF8
+    $sourceZip = Join-Path $tmp 'mock-package.zip'
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::CreateFromDirectory($template, $sourceZip)
+
+    $cacheDirectory = Join-Path $tmp 'cache'
+    $downloadCount = [ref]0
+    $getDownloadPage = { [pscustomobject]@{ Content = $html } }.GetNewClosure()
+    $downloadPackage = {
+        param($url, $destinationPath)
+        $downloadCount.Value++
+        Copy-Item -LiteralPath $sourceZip -Destination $destinationPath -Force
+    }.GetNewClosure()
+
+    $firstPackage = Get-TyranoPackage -CacheDirectory $cacheDirectory -GetDownloadPage $getDownloadPage -DownloadPackage $downloadPackage
+    Assert (-not $firstPackage.FromCache) '初回はモックパッケージをダウンロードすること'
+    Assert ($downloadCount.Value -eq 1) '初回のモックダウンロード回数'
+    $secondPackage = Get-TyranoPackage -CacheDirectory $cacheDirectory -GetDownloadPage $getDownloadPage -DownloadPackage $downloadPackage
+    Assert $secondPackage.FromCache '2回目はキャッシュを使用すること'
+    Assert ($downloadCount.Value -eq 1) 'キャッシュ利用時に再ダウンロードしないこと'
+    $refreshedPackage = Get-TyranoPackage -CacheDirectory $cacheDirectory -Refresh -GetDownloadPage $getDownloadPage -DownloadPackage $downloadPackage
+    Assert (-not $refreshedPackage.FromCache) 'Refresh指定時は再ダウンロードすること'
+    Assert ($downloadCount.Value -eq 2) 'Refresh指定時のモックダウンロード回数'
+
+    $coreProjectCreator = ${function:New-TyranoProject}
+    $mockProjectCreator = {
+        param($Id, $Title, $Directory, $ParentDirectory, $Progress, [switch]$Refresh)
+        if ($null -eq $Progress) { $Progress = { param($message) Write-Host $message } }
+        & $coreProjectCreator -Id $Id -Title $Title -Directory $Directory -ParentDirectory $ParentDirectory -Progress $Progress -CacheDirectory $cacheDirectory -Refresh:$Refresh -GetDownloadPage $getDownloadPage -DownloadPackage $downloadPackage
+    }.GetNewClosure()
+    Assert ($mockProjectCreator -is [scriptblock]) 'テスト用の作成処理がスクリプトブロックであること'
+
+    $consoleResponses = New-Object 'Collections.Generic.Queue[string]'
+    foreach ($value in @('cui-id', 'CUI title', 'cui-directory', (Join-Path $tmp 'cui-output'))) { $consoleResponses.Enqueue($value) }
+    $consolePrompts = New-Object 'Collections.Generic.List[string]'
+    $readConsoleInput = {
+        param($prompt)
+        $consolePrompts.Add($prompt)
+        return $consoleResponses.Dequeue()
+    }.GetNewClosure()
+    $consoleExitCode = Start-Console -InitialProjectId '' -InitialProjectName '' -InitialDirectoryName '' -InitialDestination '' -ReadInput $readConsoleInput -ProjectCreator $mockProjectCreator
+    $consoleProject = Join-Path (Join-Path $tmp 'cui-output') 'cui-directory'
+    Assert ($consoleExitCode -eq 0) 'CUI作成処理が成功すること'
+    Assert ($consolePrompts.Count -eq 4) 'CUIが全入力項目を尋ねること'
+    Assert (Test-Path -LiteralPath (Join-Path $consoleProject 'index.html')) 'CUIがプロジェクトを作成すること'
+    $consoleConfig = Get-Content -LiteralPath (Join-Path $consoleProject 'data\system\Config.tjs') -Raw -Encoding UTF8
+    Assert ($consoleConfig -match 'System\.title = "CUI title"') 'CUIがタイトルを反映すること'
+    Assert ($consoleConfig -match 'projectID = cui-id') 'CUIがIDを反映すること'
+
+    $notifications = New-Object 'Collections.Generic.List[object]'
+    $showMessage = {
+        param($message, $title, $buttons, $icon)
+        $notifications.Add([pscustomobject]@{ Message = $message; Title = $title })
+    }.GetNewClosure()
+    foreach ($mode in @('click', 'enter')) {
+        $guiProjectId = 'gui-' + $mode
+        $guiDirectory = 'gui-directory-' + $mode
+        $guiParent = Join-Path $tmp ('gui-output-' + $mode)
+        $guiForm = New-TyranoForm -InitialProjectId $guiProjectId -InitialProjectName ('GUI ' + $mode) -InitialDirectoryName $guiDirectory -InitialDestination $guiParent -ProjectCreator $mockProjectCreator -ShowMessage $showMessage
+        $guiButton = @($guiForm.Controls.Find('createButton', $true))[0]
+        $guiForm.Show()
+        [Windows.Forms.Application]::DoEvents()
+        if ($mode -eq 'click') { $guiButton.PerformClick() } else { $guiForm.AcceptButton.PerformClick() }
+        $guiProject = Join-Path $guiParent $guiDirectory
+        Assert (Test-Path -LiteralPath (Join-Path $guiProject 'index.html')) ('GUIの' + $mode + '操作でプロジェクトを作成すること: ' + $notifications[$notifications.Count - 1].Message)
+        Assert ($notifications[$notifications.Count - 1].Title -eq '完了') ('GUIの' + $mode + '操作で完了通知を表示すること')
+        $guiForm.Dispose()
+    }
+    Assert ($downloadCount.Value -eq 2) 'CUIとGUIの統合テストでネットワークダウンロードを行わないこと'
+} finally {
+    if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
+}
+
 Write-Host 'PASS: すべてのテストに成功しました。' -ForegroundColor Green

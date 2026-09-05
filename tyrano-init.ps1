@@ -5,7 +5,8 @@ param(
     [string]$DirectoryName,
     [string]$Destination,
     [switch]$Gui,
-    [switch]$Console
+    [switch]$Console,
+    [switch]$Refresh
 )
 
 $ErrorActionPreference = 'Stop'
@@ -28,6 +29,82 @@ function Get-LatestPackageUrl {
     $base = New-Object -TypeName Uri -ArgumentList $PageUrl
     $resolved = New-Object -TypeName Uri -ArgumentList $base, $match.Groups[1].Value
     return $resolved.AbsoluteUri
+}
+
+function Get-TyranoCacheDirectory {
+    param([string]$CacheDirectory)
+    if ([string]::IsNullOrWhiteSpace($CacheDirectory)) {
+        $localAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
+        return (Join-Path $localAppData 'tyrano-init\cache')
+    }
+    return [IO.Path]::GetFullPath($CacheDirectory)
+}
+
+function Get-TyranoPackageCachePath {
+    param(
+        [Parameter(Mandatory)][string]$PackageUrl,
+        [Parameter(Mandatory)][string]$CacheDirectory
+    )
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [Text.Encoding]::UTF8.GetBytes($PackageUrl)
+        $hash = [BitConverter]::ToString($sha256.ComputeHash($bytes)).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $sha256.Dispose()
+    }
+    return (Join-Path $CacheDirectory ($hash + '.zip'))
+}
+
+function Test-TyranoPackageArchive {
+    param([Parameter(Mandatory)][string]$ZipPath)
+    if (-not (Test-Path -LiteralPath $ZipPath -PathType Leaf)) { return $false }
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $archive = [IO.Compression.ZipFile]::OpenRead($ZipPath)
+        try { return $archive.Entries.Count -gt 0 } finally { $archive.Dispose() }
+    } catch {
+        return $false
+    }
+}
+
+function Get-TyranoPackage {
+    param(
+        [string]$CacheDirectory,
+        [switch]$Refresh,
+        [scriptblock]$Progress = { param($message) Write-Host $message },
+        [scriptblock]$GetDownloadPage,
+        [scriptblock]$DownloadPackage
+    )
+    if ($null -eq $GetDownloadPage) {
+        $GetDownloadPage = { Invoke-WebRequest -Uri $script:DownloadPage -UseBasicParsing -UserAgent $script:UserAgent }.GetNewClosure()
+    }
+    if ($null -eq $DownloadPackage) {
+        $DownloadPackage = { param($url, $path) Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing -UserAgent $script:UserAgent }.GetNewClosure()
+    }
+
+    & $Progress '公式ページから最新版の情報を取得しています…'
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $page = & $GetDownloadPage
+    $url = Get-LatestPackageUrl -Html $page.Content
+    $resolvedCacheDirectory = Get-TyranoCacheDirectory -CacheDirectory $CacheDirectory
+    New-Item -ItemType Directory -Path $resolvedCacheDirectory -Force | Out-Null
+    $cachePath = Get-TyranoPackageCachePath -PackageUrl $url -CacheDirectory $resolvedCacheDirectory
+
+    if (-not $Refresh -and (Test-TyranoPackageArchive -ZipPath $cachePath)) {
+        & $Progress ('ダウンロード済みパッケージを使用します: ' + $cachePath)
+        return [pscustomobject]@{ Url = $url; ZipPath = $cachePath; FromCache = $true }
+    }
+
+    $partialPath = $cachePath + '.partial-' + [Guid]::NewGuid().ToString([char]78)
+    try {
+        & $Progress ('ダウンロード中: ' + $url)
+        & $DownloadPackage $url $partialPath
+        if (-not (Test-TyranoPackageArchive -ZipPath $partialPath)) { throw 'ダウンロードしたZIPが空、破損、またはTyranoScriptパッケージではありません。' }
+        Move-Item -LiteralPath $partialPath -Destination $cachePath -Force
+    } finally {
+        if (Test-Path -LiteralPath $partialPath) { Remove-Item -LiteralPath $partialPath -Force -ErrorAction SilentlyContinue }
+    }
+    return [pscustomobject]@{ Url = $url; ZipPath = $cachePath; FromCache = $false }
 }
 
 function Get-ProjectSourceDirectory {
@@ -107,7 +184,11 @@ function New-TyranoProject {
         [Parameter(Mandatory)][AllowEmptyString()][string]$Title,
         [Parameter(Mandatory)][AllowEmptyString()][string]$Directory,
         [Parameter(Mandatory)][string]$ParentDirectory,
-        [scriptblock]$Progress = { param($message) Write-Host $message }
+        [scriptblock]$Progress = { param($message) Write-Host $message },
+        [string]$CacheDirectory,
+        [switch]$Refresh,
+        [scriptblock]$GetDownloadPage,
+        [scriptblock]$DownloadPackage
     )
     $settings = Resolve-ProjectSettings -Id $Id -Title $Title -Directory $Directory
     $parent = [IO.Path]::GetFullPath($ParentDirectory)
@@ -117,26 +198,19 @@ function New-TyranoProject {
 
     $guid = [Guid]::NewGuid().ToString([char]78)
     $temp = Join-Path ([IO.Path]::GetTempPath()) ('tyrano-init-' + $guid)
-    $zip = Join-Path $temp 'package.zip'
     $extract = Join-Path $temp 'extracted'
     try {
         New-Item -ItemType Directory -Path $temp, $extract -Force | Out-Null
-        & $Progress '公式ページから最新版の情報を取得しています…'
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        $page = Invoke-WebRequest -Uri $script:DownloadPage -UseBasicParsing -UserAgent $script:UserAgent
-        $url = Get-LatestPackageUrl -Html $page.Content
-        & $Progress ('ダウンロード中: ' + $url)
-        Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing -UserAgent $script:UserAgent
-        if ((Get-Item -LiteralPath $zip).Length -lt 1024) { throw 'ダウンロードしたZIPが空または不完全です。' }
+        $package = Get-TyranoPackage -CacheDirectory $CacheDirectory -Refresh:$Refresh -Progress $Progress -GetDownloadPage $GetDownloadPage -DownloadPackage $DownloadPackage
         & $Progress 'ZIPを展開しています…'
-        Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
+        Expand-Archive -LiteralPath $package.ZipPath -DestinationPath $extract -Force
         $source = Get-ProjectSourceDirectory -ExtractedDirectory $extract
         & $Progress 'プロジェクトファイルを配置しています…'
         Copy-DirectoryContents -Source $source -Target $project
         Set-TyranoProjectMetadata -ProjectDirectory $project -ProjectId $settings.Id -ProjectTitle $settings.Title
         Write-ProjectGitIgnore -ProjectDirectory $project
         & $Progress ('完了: ' + $project)
-        $result = [pscustomobject]@{ Path = $project; PackageUrl = $url }
+        $result = [pscustomobject]@{ Path = $project; PackageUrl = $package.Url; UsedCache = $package.FromCache }
         Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
         return $result
     } catch {
@@ -147,12 +221,22 @@ function New-TyranoProject {
 }
 
 function Start-Console {
-    if ([string]::IsNullOrWhiteSpace($ProjectId)) { $ProjectId = Read-Host 'プロジェクトID（半角英数字・ハイフン・アンダースコア）' }
-    if ([string]::IsNullOrWhiteSpace($ProjectName)) { $ProjectName = Read-Host 'ゲーム表示名（空欄でID）' }
-    if ([string]::IsNullOrWhiteSpace($DirectoryName)) { $DirectoryName = Read-Host 'ディレクトリー名（空欄でID）' }
-    if ([string]::IsNullOrWhiteSpace($Destination)) { $Destination = Read-Host '作成先フォルダー（空欄で現在のフォルダー）'; if ([string]::IsNullOrWhiteSpace($Destination)) { $Destination = (Get-Location).Path } }
+    param(
+        [string]$InitialProjectId = $ProjectId,
+        [string]$InitialProjectName = $ProjectName,
+        [string]$InitialDirectoryName = $DirectoryName,
+        [string]$InitialDestination = $Destination,
+        [switch]$Refresh,
+        [scriptblock]$ReadInput = { param($prompt) Read-Host $prompt },
+        [scriptblock]$ProjectCreator = ${function:New-TyranoProject}
+    )
+    $id = $InitialProjectId; $title = $InitialProjectName; $directory = $InitialDirectoryName; $destination = $InitialDestination
+    if ([string]::IsNullOrWhiteSpace($id)) { $id = & $ReadInput 'プロジェクトID（半角英数字・ハイフン・アンダースコア）' }
+    if ([string]::IsNullOrWhiteSpace($title)) { $title = & $ReadInput 'ゲーム表示名（空欄でID）' }
+    if ([string]::IsNullOrWhiteSpace($directory)) { $directory = & $ReadInput 'ディレクトリー名（空欄でID）' }
+    if ([string]::IsNullOrWhiteSpace($destination)) { $destination = & $ReadInput '作成先フォルダー（空欄で現在のフォルダー）'; if ([string]::IsNullOrWhiteSpace($destination)) { $destination = (Get-Location).Path } }
     try {
-        $result = New-TyranoProject -Id $ProjectId -Title $ProjectName -Directory $DirectoryName -ParentDirectory $Destination
+        $result = & $ProjectCreator -Id $id -Title $title -Directory $directory -ParentDirectory $destination -Refresh:$Refresh
         Write-Host "`nプロジェクトを作成しました。TyranoStudio V6で次のファイルを選択してください：`n$($result.Path)\index.html" -ForegroundColor Green
         Write-Host 'TyranoStudio V6: https://tyrano.jp/dl/v6'
     } catch { Write-Error $_.Exception.Message; return 1 }
@@ -164,13 +248,19 @@ function New-TyranoForm {
         [string]$InitialProjectId,
         [string]$InitialProjectName,
         [string]$InitialDirectoryName,
-        [Parameter(Mandatory)][string]$InitialDestination
+        [Parameter(Mandatory)][string]$InitialDestination,
+        [switch]$Refresh,
+        [scriptblock]$ProjectCreator = ${function:New-TyranoProject},
+        [scriptblock]$ShowMessage = {
+            param($message, $title, $buttons, $icon)
+            if ($null -eq $buttons) { return [Windows.Forms.MessageBox]::Show($message, $title) }
+            return [Windows.Forms.MessageBox]::Show($message, $title, $buttons, $icon)
+        }
     )
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
     [Windows.Forms.Application]::EnableVisualStyles()
     $defaultDestination = $InitialDestination
-    $createProject = ${function:New-TyranoProject}
     $form = New-Object Windows.Forms.Form; $form.Text = 'TyranoScript 初期セットアップ'; $form.Size = New-Object Drawing.Size(600, 350); $form.StartPosition = 'CenterScreen'
     $label1 = New-Object Windows.Forms.Label; $label1.Text = 'プロジェクトID'; $label1.Location = New-Object Drawing.Point(20, 22); $label1.AutoSize = $true
     $idBox = New-Object Windows.Forms.TextBox; $idBox.Name = 'projectIdBox'; $idBox.Location = New-Object Drawing.Point(170, 18); $idBox.Width = 390; $idBox.Text = $InitialProjectId
@@ -181,10 +271,33 @@ function New-TyranoForm {
     $label4 = New-Object Windows.Forms.Label; $label4.Text = '作成先フォルダー'; $label4.Location = New-Object Drawing.Point(20, 142); $label4.AutoSize = $true
     $destBox = New-Object Windows.Forms.TextBox; $destBox.Name = 'destinationBox'; $destBox.Location = New-Object Drawing.Point(170, 138); $destBox.Width = 310; $destBox.Text = $defaultDestination
     $browse = New-Object Windows.Forms.Button; $browse.Name = 'browseButton'; $browse.Text = '参照…'; $browse.Location = New-Object Drawing.Point(490, 136)
-    $browse.Add_Click(({ $dialog = New-Object Windows.Forms.FolderBrowserDialog; if ($dialog.ShowDialog() -eq 'OK') { $destBox.Text = $dialog.SelectedPath } }).GetNewClosure())
-    $status = New-Object Windows.Forms.Label; $status.Text = '必要項目を入力してください。'; $status.Location = New-Object Drawing.Point(20, 185); $status.Size = New-Object Drawing.Size(540, 45)
+    $browse.Add_Click({ param($sender, $eventArgs); $dialog = New-Object Windows.Forms.FolderBrowserDialog; if ($dialog.ShowDialog() -eq 'OK') { $form = $sender.FindForm(); @($form.Controls.Find('destinationBox', $true))[0].Text = $dialog.SelectedPath } })
+    $status = New-Object Windows.Forms.Label; $status.Name = 'statusLabel'; $status.Text = '必要項目を入力してください。'; $status.Location = New-Object Drawing.Point(20, 185); $status.Size = New-Object Drawing.Size(540, 45)
     $run = New-Object Windows.Forms.Button; $run.Name = 'createButton'; $run.Text = '作成'; $run.Location = New-Object Drawing.Point(450, 250); $run.Width = 110
-    $runHandler = { param($sender, $eventArgs); try { $sender.Enabled = $false; $status.Text = '処理中…'; $progress = { param($m) $status.Text = $m; [Windows.Forms.Application]::DoEvents() }.GetNewClosure(); $result = & $createProject -Id $idBox.Text -Title $nameBox.Text -Directory $directoryBox.Text -ParentDirectory $destBox.Text -Progress $progress; [Windows.Forms.MessageBox]::Show("作成しました。`n$($result.Path)\index.html", '完了'); $form.Close() } catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'エラー', 'OK', 'Error') } finally { $sender.Enabled = $true } }.GetNewClosure()
+    $form.Tag = [pscustomobject]@{ ProjectCreator = $ProjectCreator; ShowMessage = $ShowMessage; Refresh = [bool]$Refresh }
+    $runHandler = {
+        param($sender, $eventArgs)
+        $form = $sender.FindForm()
+        $idBox = @($form.Controls.Find('projectIdBox', $true))[0]
+        $nameBox = @($form.Controls.Find('projectNameBox', $true))[0]
+        $directoryBox = @($form.Controls.Find('directoryNameBox', $true))[0]
+        $destBox = @($form.Controls.Find('destinationBox', $true))[0]
+        $status = @($form.Controls.Find('statusLabel', $true))[0]
+        $projectCreator = $form.Tag.ProjectCreator
+        $showMessage = $form.Tag.ShowMessage
+        try {
+            $sender.Enabled = $false
+            $status.Text = '処理中…'
+            $progress = { param($message) $status.Text = $message; [Windows.Forms.Application]::DoEvents() }.GetNewClosure()
+            $result = & $projectCreator -Id $idBox.Text -Title $nameBox.Text -Directory $directoryBox.Text -ParentDirectory $destBox.Text -Refresh:$form.Tag.Refresh -Progress $progress
+            & $showMessage "作成しました。`n$($result.Path)\index.html" '完了'
+            $form.Close()
+        } catch {
+            & $showMessage $_.Exception.Message 'エラー' 'OK' 'Error'
+        } finally {
+            $sender.Enabled = $true
+        }
+    }
     $run.Add_Click($runHandler)
     $form.AcceptButton = $run
     $form.Controls.AddRange(@($label1, $idBox, $label2, $directoryBox, $label3, $nameBox, $label4, $destBox, $browse, $status, $run))
@@ -192,8 +305,9 @@ function New-TyranoForm {
 }
 
 function Start-Gui {
+    param([switch]$Refresh)
     $defaultDestination = if ([string]::IsNullOrWhiteSpace($Destination)) { (Get-Location).Path } else { $Destination }
-    $form = New-TyranoForm -InitialProjectId $ProjectId -InitialProjectName $ProjectName -InitialDirectoryName $DirectoryName -InitialDestination $defaultDestination
+    $form = New-TyranoForm -InitialProjectId $ProjectId -InitialProjectName $ProjectName -InitialDirectoryName $DirectoryName -InitialDestination $defaultDestination -Refresh:$Refresh
     [Windows.Forms.Application]::Run($form)
 }
 
@@ -201,6 +315,6 @@ if ($MyInvocation.InvocationName -ne '.') {
     # Explorer's "Run with PowerShell" supplies no reliable marker that can
     # be distinguished from a terminal launch. No-argument launches therefore
     # open the GUI; use -Console for interactive text mode.
-    if ($Gui -or (-not $Console -and [string]::IsNullOrWhiteSpace($ProjectId) -and [string]::IsNullOrWhiteSpace($ProjectName) -and [string]::IsNullOrWhiteSpace($DirectoryName) -and [string]::IsNullOrWhiteSpace($Destination))) { Start-Gui }
-    else { exit (Start-Console) }
+    if ($Gui -or (-not $Console -and [string]::IsNullOrWhiteSpace($ProjectId) -and [string]::IsNullOrWhiteSpace($ProjectName) -and [string]::IsNullOrWhiteSpace($DirectoryName) -and [string]::IsNullOrWhiteSpace($Destination))) { Start-Gui -Refresh:$Refresh }
+    else { exit (Start-Console -Refresh:$Refresh) }
 }
