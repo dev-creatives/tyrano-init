@@ -4,6 +4,22 @@
 function Assert([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw "FAIL: $Message" }
 }
+
+$form = New-TyranoForm -InitialProjectId 'my-game' -InitialProjectName '' -InitialDirectoryName '' -InitialDestination (Get-Location).Path
+$idControl = @($form.Controls.Find('projectIdBox', $true))
+$nameControl = @($form.Controls.Find('projectNameBox', $true))
+$directoryControl = @($form.Controls.Find('directoryNameBox', $true))
+$destinationControl = @($form.Controls.Find('destinationBox', $true))
+$createButton = @($form.Controls.Find('createButton', $true))
+Assert ($idControl.Count -eq 1) 'GUIのプロジェクトID入力欄'
+Assert ($nameControl.Count -eq 1) 'GUIのプロジェクト名入力欄'
+Assert ($directoryControl.Count -eq 1) 'GUIのディレクトリー名入力欄'
+Assert ($destinationControl.Count -eq 1) 'GUIの作成先入力欄'
+Assert ($createButton.Count -eq 1) 'GUIの作成ボタン'
+Assert ($idControl[0].Text -eq 'my-game') 'GUIのプロジェクトID初期値'
+Assert ($form.AcceptButton -eq $createButton[0]) 'GUIのEnterキー実行設定'
+$form.Dispose()
+
 $html = '<a href="/download/studio/test.zip">最新版をダウンロード</a>'
 Assert ((Get-LatestPackageUrl -Html $html) -eq 'https://tyrano.jp/download/studio/test.zip') '最新版リンクの解析'
 Assert ((Resolve-ProjectSettings -Id 'my-game_2026' -Title '' -Directory '').Title -eq 'my-game_2026') '表示名のIDフォールバック'

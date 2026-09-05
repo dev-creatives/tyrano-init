@@ -159,26 +159,39 @@ function Start-Console {
     return 0
 }
 
-function Start-Gui {
+function New-TyranoForm {
+    param(
+        [string]$InitialProjectId,
+        [string]$InitialProjectName,
+        [string]$InitialDirectoryName,
+        [Parameter(Mandatory)][string]$InitialDestination
+    )
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
     [Windows.Forms.Application]::EnableVisualStyles()
-    $defaultDestination = if ([string]::IsNullOrWhiteSpace($Destination)) { (Get-Location).Path } else { $Destination }
+    $defaultDestination = $InitialDestination
     $form = New-Object Windows.Forms.Form; $form.Text = 'TyranoScript 初期セットアップ'; $form.Size = New-Object Drawing.Size(600, 350); $form.StartPosition = 'CenterScreen'
     $label1 = New-Object Windows.Forms.Label; $label1.Text = 'プロジェクトID'; $label1.Location = New-Object Drawing.Point(20, 22); $label1.AutoSize = $true
-    $idBox = New-Object Windows.Forms.TextBox; $idBox.Location = New-Object Drawing.Point(170, 18); $idBox.Width = 390; $idBox.Text = $ProjectId
+    $idBox = New-Object Windows.Forms.TextBox; $idBox.Name = 'projectIdBox'; $idBox.Location = New-Object Drawing.Point(170, 18); $idBox.Width = 390; $idBox.Text = $InitialProjectId
     $label2 = New-Object Windows.Forms.Label; $label2.Text = 'ゲーム表示名（空欄でID）'; $label2.Location = New-Object Drawing.Point(20, 62); $label2.AutoSize = $true
-    $nameBox = New-Object Windows.Forms.TextBox; $nameBox.Location = New-Object Drawing.Point(170, 58); $nameBox.Width = 390; $nameBox.Text = $ProjectName
+    $nameBox = New-Object Windows.Forms.TextBox; $nameBox.Name = 'projectNameBox'; $nameBox.Location = New-Object Drawing.Point(170, 58); $nameBox.Width = 390; $nameBox.Text = $InitialProjectName
     $label3 = New-Object Windows.Forms.Label; $label3.Text = 'ディレクトリー名（空欄でID）'; $label3.Location = New-Object Drawing.Point(20, 102); $label3.AutoSize = $true
-    $directoryBox = New-Object Windows.Forms.TextBox; $directoryBox.Location = New-Object Drawing.Point(170, 98); $directoryBox.Width = 390; $directoryBox.Text = $DirectoryName
+    $directoryBox = New-Object Windows.Forms.TextBox; $directoryBox.Name = 'directoryNameBox'; $directoryBox.Location = New-Object Drawing.Point(170, 98); $directoryBox.Width = 390; $directoryBox.Text = $InitialDirectoryName
     $label4 = New-Object Windows.Forms.Label; $label4.Text = '作成先フォルダー'; $label4.Location = New-Object Drawing.Point(20, 142); $label4.AutoSize = $true
-    $destBox = New-Object Windows.Forms.TextBox; $destBox.Location = New-Object Drawing.Point(170, 138); $destBox.Width = 310; $destBox.Text = $defaultDestination
+    $destBox = New-Object Windows.Forms.TextBox; $destBox.Name = 'destinationBox'; $destBox.Location = New-Object Drawing.Point(170, 138); $destBox.Width = 310; $destBox.Text = $defaultDestination
     $browse = New-Object Windows.Forms.Button; $browse.Text = '参照…'; $browse.Location = New-Object Drawing.Point(490, 136); $browse.Add_Click({ $dialog = New-Object Windows.Forms.FolderBrowserDialog; if ($dialog.ShowDialog() -eq 'OK') { $destBox.Text = $dialog.SelectedPath } })
     $status = New-Object Windows.Forms.Label; $status.Text = '必要項目を入力してください。'; $status.Location = New-Object Drawing.Point(20, 185); $status.Size = New-Object Drawing.Size(540, 45)
-    $run = New-Object Windows.Forms.Button; $run.Text = '作成'; $run.Location = New-Object Drawing.Point(450, 250); $run.Width = 110
+    $run = New-Object Windows.Forms.Button; $run.Name = 'createButton'; $run.Text = '作成'; $run.Location = New-Object Drawing.Point(450, 250); $run.Width = 110
     $run.Add_Click({ try { $run.Enabled = $false; $status.Text = '処理中…'; $result = New-TyranoProject -Id $idBox.Text -Title $nameBox.Text -Directory $directoryBox.Text -ParentDirectory $destBox.Text -Progress { param($m) $status.Text = $m; [Windows.Forms.Application]::DoEvents() }; [Windows.Forms.MessageBox]::Show("作成しました。`n$($result.Path)\index.html", '完了'); $form.Close() } catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'エラー', 'OK', 'Error') } finally { $run.Enabled = $true } })
     $form.AcceptButton = $run
-    $form.Controls.AddRange(@($label1, $idBox, $label2, $nameBox, $label3, $directoryBox, $label4, $destBox, $browse, $status, $run)); [Windows.Forms.Application]::Run($form)
+    $form.Controls.AddRange(@($label1, $idBox, $label2, $nameBox, $label3, $directoryBox, $label4, $destBox, $browse, $status, $run))
+    return $form
+}
+
+function Start-Gui {
+    $defaultDestination = if ([string]::IsNullOrWhiteSpace($Destination)) { (Get-Location).Path } else { $Destination }
+    $form = New-TyranoForm -InitialProjectId $ProjectId -InitialProjectName $ProjectName -InitialDirectoryName $DirectoryName -InitialDestination $defaultDestination
+    [Windows.Forms.Application]::Run($form)
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
