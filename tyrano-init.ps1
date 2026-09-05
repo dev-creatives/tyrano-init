@@ -1,6 +1,8 @@
 ﻿[CmdletBinding()]
 param(
+    [string]$ProjectId,
     [string]$ProjectName,
+    [string]$DirectoryName,
     [string]$Destination,
     [switch]$Gui,
     [switch]$Console
@@ -51,16 +53,66 @@ function Copy-DirectoryContents {
     }
 }
 
+function Resolve-ProjectSettings {
+    param(
+        [Parameter(Mandatory)][string]$Id,
+        [string]$Title,
+        [string]$Directory
+    )
+    if ([string]::IsNullOrWhiteSpace($Id) -or $Id -notmatch '^[A-Za-z0-9_-]+$') {
+        throw 'プロジェクトIDは半角英数字、ハイフン、アンダースコアだけで指定してください。'
+    }
+    if ([string]::IsNullOrWhiteSpace($Title)) { $Title = $Id }
+    if ($Title -match '[\r\n"]') { throw 'ゲーム表示名に改行またはダブルクォートは使用できません。' }
+    if ([string]::IsNullOrWhiteSpace($Directory)) { $Directory = $Id }
+    if ($Directory -match '[\\/:*?"<>|]' -or $Directory -match '[\. ]$') { throw 'ディレクトリー名にWindowsで使えない文字は使用できません。' }
+    return [pscustomobject]@{ Id = $Id; Title = $Title; Directory = $Directory }
+}
+
+function Set-TyranoProjectMetadata {
+    param(
+        [Parameter(Mandatory)][string]$ProjectDirectory,
+        [Parameter(Mandatory)][string]$ProjectId,
+        [Parameter(Mandatory)][string]$ProjectTitle
+    )
+    $configPath = Join-Path $ProjectDirectory 'data\system\Config.tjs'
+    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) { throw 'Config.tjs が見つかりません。TyranoScriptプロジェクトとして認識できません。' }
+    $text = [IO.File]::ReadAllText($configPath)
+    $lines = $text -split "`r?`n", 0
+    $foundId = $false; $foundTitle = $false
+    $updated = foreach ($line in $lines) {
+        if ($line -match '^\s*;projectID\s*=') { $foundId = $true; ';projectID = ' + $ProjectId + ';' }
+        elseif ($line -match '^\s*;System\.title\s*=') { $foundTitle = $true; ';System.title = "' + $ProjectTitle + '";' }
+        else { $line }
+    }
+    if (-not $foundId -or -not $foundTitle) { throw 'Config.tjsにprojectIDまたはSystem.titleの設定が見つかりません。' }
+    [IO.File]::WriteAllText($configPath, ($updated -join "`r`n"), (New-Object Text.UTF8Encoding($false)))
+
+    $studioPath = Join-Path $ProjectDirectory 'studio_config.json'
+    if (Test-Path -LiteralPath $studioPath -PathType Leaf) {
+        try {
+            $studio = Get-Content -LiteralPath $studioPath -Raw | ConvertFrom-Json
+            if ($null -eq $studio.pobj) { $studio | Add-Member -NotePropertyName pobj -NotePropertyValue ([pscustomobject]@{}) }
+            $studio.pobj.project_id = $ProjectId
+            $studio.pobj.title = $ProjectTitle
+            $studio.pobj.path = $ProjectDirectory
+            [IO.File]::WriteAllText($studioPath, ($studio | ConvertTo-Json -Depth 10), (New-Object Text.UTF8Encoding($false)))
+        } catch { throw "studio_config.jsonの更新に失敗しました: $($_.Exception.Message)" }
+    }
+}
+
 function New-TyranoProject {
     param(
-        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Id,
+        [Parameter(Mandatory)][string]$Title,
+        [Parameter(Mandatory)][string]$Directory,
         [Parameter(Mandatory)][string]$ParentDirectory,
         [scriptblock]$Progress = { param($message) Write-Host $message }
     )
-    if ([string]::IsNullOrWhiteSpace($Name) -or $Name -match '[\\/:*?"<>|]') { throw 'プロジェクト名が空、またはWindowsで使えない文字を含んでいます。' }
+    $settings = Resolve-ProjectSettings -Id $Id -Title $Title -Directory $Directory
     $parent = [IO.Path]::GetFullPath($ParentDirectory)
     if (-not (Test-Path -LiteralPath $parent -PathType Container)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
-    $project = Join-Path $parent $Name
+    $project = Join-Path $parent $settings.Directory
     if (Test-Path -LiteralPath $project) { throw "出力先は既に存在します（上書きしません）：$project" }
 
     $guid = [Guid]::NewGuid().ToString([char]78)
@@ -81,6 +133,7 @@ function New-TyranoProject {
         $source = Get-ProjectSourceDirectory -ExtractedDirectory $extract
         & $Progress 'プロジェクトファイルを配置しています…'
         Copy-DirectoryContents -Source $source -Target $project
+        Set-TyranoProjectMetadata -ProjectDirectory $project -ProjectId $settings.Id -ProjectTitle $settings.Title
         Write-ProjectGitIgnore -ProjectDirectory $project
         & $Progress ('完了: ' + $project)
         $result = [pscustomobject]@{ Path = $project; PackageUrl = $url }
@@ -94,10 +147,12 @@ function New-TyranoProject {
 }
 
 function Start-Console {
-    if ([string]::IsNullOrWhiteSpace($ProjectName)) { $ProjectName = Read-Host 'プロジェクト名（例: MyNovel）' }
+    if ([string]::IsNullOrWhiteSpace($ProjectId)) { $ProjectId = Read-Host 'プロジェクトID（半角英数字・ハイフン・アンダースコア）' }
+    if ($null -eq $ProjectName) { $ProjectName = Read-Host 'ゲーム表示名（空欄でID）' }
+    if ($null -eq $DirectoryName) { $DirectoryName = Read-Host 'ディレクトリー名（空欄でID）' }
     if ([string]::IsNullOrWhiteSpace($Destination)) { $Destination = Read-Host '作成先フォルダー（空欄で現在のフォルダー）'; if ([string]::IsNullOrWhiteSpace($Destination)) { $Destination = (Get-Location).Path } }
     try {
-        $result = New-TyranoProject -Name $ProjectName -ParentDirectory $Destination
+        $result = New-TyranoProject -Id $ProjectId -Title $ProjectName -Directory $DirectoryName -ParentDirectory $Destination
         Write-Host "`nプロジェクトを作成しました。TyranoStudio V6で次のファイルを選択してください：`n$($result.Path)\index.html" -ForegroundColor Green
         Write-Host 'TyranoStudio V6: https://tyrano.jp/dl/v6'
     } catch { Write-Error $_.Exception.Message; return 1 }
@@ -109,15 +164,19 @@ function Start-Gui {
     Add-Type -AssemblyName System.Drawing
     [Windows.Forms.Application]::EnableVisualStyles()
     $defaultDestination = if ([string]::IsNullOrWhiteSpace($Destination)) { (Get-Location).Path } else { $Destination }
-    $form = New-Object Windows.Forms.Form; $form.Text = 'TyranoScript 初期セットアップ'; $form.Size = New-Object Drawing.Size(560, 250); $form.StartPosition = 'CenterScreen'
-    $label1 = New-Object Windows.Forms.Label; $label1.Text = 'プロジェクト名'; $label1.Location = New-Object Drawing.Point(20, 22); $label1.AutoSize = $true
-    $nameBox = New-Object Windows.Forms.TextBox; $nameBox.Location = New-Object Drawing.Point(150, 18); $nameBox.Width = 360; $nameBox.Text = $ProjectName
-    $label2 = New-Object Windows.Forms.Label; $label2.Text = '作成先フォルダー'; $label2.Location = New-Object Drawing.Point(20, 62); $label2.AutoSize = $true
-    $destBox = New-Object Windows.Forms.TextBox; $destBox.Location = New-Object Drawing.Point(150, 58); $destBox.Width = 280; $destBox.Text = $defaultDestination
-    $browse = New-Object Windows.Forms.Button; $browse.Text = '参照…'; $browse.Location = New-Object Drawing.Point(440, 56); $browse.Add_Click({ $dialog = New-Object Windows.Forms.FolderBrowserDialog; if ($dialog.ShowDialog() -eq 'OK') { $destBox.Text = $dialog.SelectedPath } })
-    $status = New-Object Windows.Forms.Label; $status.Text = 'プロジェクト名と作成先を入力してください。'; $status.Location = New-Object Drawing.Point(20, 105); $status.Size = New-Object Drawing.Size(500, 45)
-    $run = New-Object Windows.Forms.Button; $run.Text = '作成'; $run.Location = New-Object Drawing.Point(400, 165); $run.Width = 110
-    $run.Add_Click({ try { $run.Enabled = $false; $status.Text = '処理中…'; $result = New-TyranoProject -Name $nameBox.Text -ParentDirectory $destBox.Text -Progress { param($m) $status.Text = $m; [Windows.Forms.Application]::DoEvents() }; [Windows.Forms.MessageBox]::Show("作成しました。`n$($result.Path)\index.html", '完了'); $form.Close() } catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'エラー', 'OK', 'Error') } finally { $run.Enabled = $true } })
+    $form = New-Object Windows.Forms.Form; $form.Text = 'TyranoScript 初期セットアップ'; $form.Size = New-Object Drawing.Size(600, 350); $form.StartPosition = 'CenterScreen'
+    $label1 = New-Object Windows.Forms.Label; $label1.Text = 'プロジェクトID'; $label1.Location = New-Object Drawing.Point(20, 22); $label1.AutoSize = $true
+    $idBox = New-Object Windows.Forms.TextBox; $idBox.Location = New-Object Drawing.Point(170, 18); $idBox.Width = 390; $idBox.Text = $ProjectId
+    $label2 = New-Object Windows.Forms.Label; $label2.Text = 'ゲーム表示名（空欄でID）'; $label2.Location = New-Object Drawing.Point(20, 62); $label2.AutoSize = $true
+    $nameBox = New-Object Windows.Forms.TextBox; $nameBox.Location = New-Object Drawing.Point(170, 58); $nameBox.Width = 390; $nameBox.Text = $ProjectName
+    $label3 = New-Object Windows.Forms.Label; $label3.Text = 'ディレクトリー名（空欄でID）'; $label3.Location = New-Object Drawing.Point(20, 102); $label3.AutoSize = $true
+    $directoryBox = New-Object Windows.Forms.TextBox; $directoryBox.Location = New-Object Drawing.Point(170, 98); $directoryBox.Width = 390; $directoryBox.Text = $DirectoryName
+    $label4 = New-Object Windows.Forms.Label; $label4.Text = '作成先フォルダー'; $label4.Location = New-Object Drawing.Point(20, 142); $label4.AutoSize = $true
+    $destBox = New-Object Windows.Forms.TextBox; $destBox.Location = New-Object Drawing.Point(170, 138); $destBox.Width = 310; $destBox.Text = $defaultDestination
+    $browse = New-Object Windows.Forms.Button; $browse.Text = '参照…'; $browse.Location = New-Object Drawing.Point(490, 136); $browse.Add_Click({ $dialog = New-Object Windows.Forms.FolderBrowserDialog; if ($dialog.ShowDialog() -eq 'OK') { $destBox.Text = $dialog.SelectedPath } })
+    $status = New-Object Windows.Forms.Label; $status.Text = '必要項目を入力してください。'; $status.Location = New-Object Drawing.Point(20, 185); $status.Size = New-Object Drawing.Size(540, 45)
+    $run = New-Object Windows.Forms.Button; $run.Text = '作成'; $run.Location = New-Object Drawing.Point(450, 250); $run.Width = 110
+    $run.Add_Click({ try { $run.Enabled = $false; $status.Text = '処理中…'; $result = New-TyranoProject -Id $idBox.Text -Title $nameBox.Text -Directory $directoryBox.Text -ParentDirectory $destBox.Text -Progress { param($m) $status.Text = $m; [Windows.Forms.Application]::DoEvents() }; [Windows.Forms.MessageBox]::Show("作成しました。`n$($result.Path)\index.html", '完了'); $form.Close() } catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'エラー', 'OK', 'Error') } finally { $run.Enabled = $true } })
     $form.AcceptButton = $run
     $form.Controls.AddRange(@($label1, $nameBox, $label2, $destBox, $browse, $status, $run)); [Windows.Forms.Application]::Run($form)
 }
@@ -126,6 +185,6 @@ if ($MyInvocation.InvocationName -ne '.') {
     # Explorer's "Run with PowerShell" supplies no reliable marker that can
     # be distinguished from a terminal launch. No-argument launches therefore
     # open the GUI; use -Console for interactive text mode.
-    if ($Gui -or (-not $Console -and [string]::IsNullOrWhiteSpace($ProjectName) -and [string]::IsNullOrWhiteSpace($Destination))) { Start-Gui }
+    if ($Gui -or (-not $Console -and [string]::IsNullOrWhiteSpace($ProjectId) -and [string]::IsNullOrWhiteSpace($ProjectName) -and [string]::IsNullOrWhiteSpace($DirectoryName) -and [string]::IsNullOrWhiteSpace($Destination))) { Start-Gui }
     else { exit (Start-Console) }
 }
