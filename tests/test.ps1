@@ -10,16 +10,24 @@ $idControl = @($form.Controls.Find('projectIdBox', $true))
 $nameControl = @($form.Controls.Find('projectNameBox', $true))
 $directoryControl = @($form.Controls.Find('directoryNameBox', $true))
 $destinationControl = @($form.Controls.Find('destinationBox', $true))
+$browseButton = @($form.Controls.Find('browseButton', $true))
 $createButton = @($form.Controls.Find('createButton', $true))
 Assert ($idControl.Count -eq 1) 'GUIのプロジェクトID入力欄'
 Assert ($nameControl.Count -eq 1) 'GUIのプロジェクト名入力欄'
 Assert ($directoryControl.Count -eq 1) 'GUIのディレクトリー名入力欄'
 Assert ($destinationControl.Count -eq 1) 'GUIの作成先入力欄'
+Assert ($browseButton.Count -eq 1) 'GUIの参照ボタン'
 Assert ($createButton.Count -eq 1) 'GUIの作成ボタン'
 Assert ($idControl[0].Text -eq 'my-game') 'GUIのプロジェクトID初期値'
 Assert ($form.AcceptButton -eq $createButton[0]) 'GUIのEnterキー実行設定'
 Assert ($idControl[0].Top -lt $directoryControl[0].Top) 'GUIのIDがディレクトリー名より上'
 Assert ($directoryControl[0].Top -lt $nameControl[0].Top) 'GUIのディレクトリー名がタイトルより上'
+Assert ($idControl[0].TabIndex -eq 0) 'GUIのIDのTabIndex'
+Assert ($directoryControl[0].TabIndex -eq 1) 'GUIのディレクトリー名のTabIndex'
+Assert ($nameControl[0].TabIndex -eq 2) 'GUIのタイトルのTabIndex'
+Assert ($destinationControl[0].TabIndex -eq 3) 'GUIの作成先のTabIndex'
+Assert ($browseButton[0].TabIndex -eq 4) 'GUIの参照ボタンのTabIndex'
+Assert ($createButton[0].TabIndex -eq 5) 'GUIの作成ボタンのTabIndex'
 $form.Dispose()
 
 $html = '<a href="/download/studio/test.zip">最新版をダウンロード</a>'
