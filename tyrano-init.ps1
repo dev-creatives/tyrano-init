@@ -108,11 +108,12 @@ function Start-Gui {
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
     [Windows.Forms.Application]::EnableVisualStyles()
+    $defaultDestination = if ([string]::IsNullOrWhiteSpace($Destination)) { (Get-Location).Path } else { $Destination }
     $form = New-Object Windows.Forms.Form; $form.Text = 'TyranoScript 初期セットアップ'; $form.Size = New-Object Drawing.Size(560, 250); $form.StartPosition = 'CenterScreen'
     $label1 = New-Object Windows.Forms.Label; $label1.Text = 'プロジェクト名'; $label1.Location = New-Object Drawing.Point(20, 22); $label1.AutoSize = $true
     $nameBox = New-Object Windows.Forms.TextBox; $nameBox.Location = New-Object Drawing.Point(150, 18); $nameBox.Width = 360; $nameBox.Text = $ProjectName
     $label2 = New-Object Windows.Forms.Label; $label2.Text = '作成先フォルダー'; $label2.Location = New-Object Drawing.Point(20, 62); $label2.AutoSize = $true
-    $destBox = New-Object Windows.Forms.TextBox; $destBox.Location = New-Object Drawing.Point(150, 58); $destBox.Width = 280; $destBox.Text = $Destination
+    $destBox = New-Object Windows.Forms.TextBox; $destBox.Location = New-Object Drawing.Point(150, 58); $destBox.Width = 280; $destBox.Text = $defaultDestination
     $browse = New-Object Windows.Forms.Button; $browse.Text = '参照…'; $browse.Location = New-Object Drawing.Point(440, 56); $browse.Add_Click({ $dialog = New-Object Windows.Forms.FolderBrowserDialog; if ($dialog.ShowDialog() -eq 'OK') { $destBox.Text = $dialog.SelectedPath } })
     $status = New-Object Windows.Forms.Label; $status.Text = 'プロジェクト名と作成先を入力してください。'; $status.Location = New-Object Drawing.Point(20, 105); $status.Size = New-Object Drawing.Size(500, 45)
     $run = New-Object Windows.Forms.Button; $run.Text = '作成'; $run.Location = New-Object Drawing.Point(400, 165); $run.Width = 110
