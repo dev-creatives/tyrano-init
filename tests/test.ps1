@@ -25,6 +25,7 @@ Assert ($directoryControl[0].Top -lt $nameControl[0].Top) 'GUIのディレクト
 $formSource = (Get-Command New-TyranoForm).ScriptBlock.ToString()
 Assert (-not ($formSource -match '\.TabIndex\s*=')) 'GUIでTabIndexを二重管理しないこと'
 Assert ($formSource -match 'AddRange\(@\(\$label1,\s*\$idBox,\s*\$label2,\s*\$directoryBox,\s*\$label3,\s*\$nameBox') 'GUIの追加順が画面順であること'
+Assert ($formSource -match 'param\(\$sender,\s*\$eventArgs\).*\$sender\.Enabled') 'GUIのイベント送信元でボタン状態を操作すること'
 $form.Dispose()
 
 $html = '<a href="/download/studio/test.zip">最新版をダウンロード</a>'
