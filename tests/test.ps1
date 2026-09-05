@@ -27,6 +27,8 @@ Assert (-not ($formSource -match '\.TabIndex\s*=')) 'GUIでTabIndexを二重管�
 Assert ($formSource -match 'AddRange\(@\(\$label1,\s*\$idBox,\s*\$label2,\s*\$directoryBox,\s*\$label3,\s*\$nameBox') 'GUIの追加順が画面順であること'
 Assert ($formSource -match 'param\(\$sender,\s*\$eventArgs\).*\$sender\.Enabled') 'GUIのイベント送信元でボタン状態を操作すること'
 Assert ($formSource -match 'GetNewClosure\(\)') 'GUIのイベントハンドラーがフォームの入力欄を保持すること'
+Assert ($formSource -match '\$createProject\s*=\s*\$\{function:New-TyranoProject\}') 'GUIがプロジェクト作成関数をイベント前に保持すること'
+Assert ($formSource -match '&\s+\$createProject\s+-Id') 'GUIが保持したプロジェクト作成関数を実行すること'
 $form.Dispose()
 
 $html = '<a href="/download/studio/test.zip">最新版をダウンロード</a>'

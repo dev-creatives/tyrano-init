@@ -170,6 +170,7 @@ function New-TyranoForm {
     Add-Type -AssemblyName System.Drawing
     [Windows.Forms.Application]::EnableVisualStyles()
     $defaultDestination = $InitialDestination
+    $createProject = ${function:New-TyranoProject}
     $form = New-Object Windows.Forms.Form; $form.Text = 'TyranoScript 初期セットアップ'; $form.Size = New-Object Drawing.Size(600, 350); $form.StartPosition = 'CenterScreen'
     $label1 = New-Object Windows.Forms.Label; $label1.Text = 'プロジェクトID'; $label1.Location = New-Object Drawing.Point(20, 22); $label1.AutoSize = $true
     $idBox = New-Object Windows.Forms.TextBox; $idBox.Name = 'projectIdBox'; $idBox.Location = New-Object Drawing.Point(170, 18); $idBox.Width = 390; $idBox.Text = $InitialProjectId
@@ -183,7 +184,7 @@ function New-TyranoForm {
     $browse.Add_Click(({ $dialog = New-Object Windows.Forms.FolderBrowserDialog; if ($dialog.ShowDialog() -eq 'OK') { $destBox.Text = $dialog.SelectedPath } }).GetNewClosure())
     $status = New-Object Windows.Forms.Label; $status.Text = '必要項目を入力してください。'; $status.Location = New-Object Drawing.Point(20, 185); $status.Size = New-Object Drawing.Size(540, 45)
     $run = New-Object Windows.Forms.Button; $run.Name = 'createButton'; $run.Text = '作成'; $run.Location = New-Object Drawing.Point(450, 250); $run.Width = 110
-    $runHandler = { param($sender, $eventArgs); try { $sender.Enabled = $false; $status.Text = '処理中…'; $progress = { param($m) $status.Text = $m; [Windows.Forms.Application]::DoEvents() }.GetNewClosure(); $result = New-TyranoProject -Id $idBox.Text -Title $nameBox.Text -Directory $directoryBox.Text -ParentDirectory $destBox.Text -Progress $progress; [Windows.Forms.MessageBox]::Show("作成しました。`n$($result.Path)\index.html", '完了'); $form.Close() } catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'エラー', 'OK', 'Error') } finally { $sender.Enabled = $true } }.GetNewClosure()
+    $runHandler = { param($sender, $eventArgs); try { $sender.Enabled = $false; $status.Text = '処理中…'; $progress = { param($m) $status.Text = $m; [Windows.Forms.Application]::DoEvents() }.GetNewClosure(); $result = & $createProject -Id $idBox.Text -Title $nameBox.Text -Directory $directoryBox.Text -ParentDirectory $destBox.Text -Progress $progress; [Windows.Forms.MessageBox]::Show("作成しました。`n$($result.Path)\index.html", '完了'); $form.Close() } catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'エラー', 'OK', 'Error') } finally { $sender.Enabled = $true } }.GetNewClosure()
     $run.Add_Click($runHandler)
     $form.AcceptButton = $run
     $form.Controls.AddRange(@($label1, $idBox, $label2, $directoryBox, $label3, $nameBox, $label4, $destBox, $browse, $status, $run))
