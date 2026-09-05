@@ -104,8 +104,8 @@ function Set-TyranoProjectMetadata {
 function New-TyranoProject {
     param(
         [Parameter(Mandatory)][string]$Id,
-        [Parameter(Mandatory)][string]$Title,
-        [Parameter(Mandatory)][string]$Directory,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Title,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Directory,
         [Parameter(Mandatory)][string]$ParentDirectory,
         [scriptblock]$Progress = { param($message) Write-Host $message }
     )

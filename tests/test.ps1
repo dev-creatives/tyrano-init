@@ -26,6 +26,11 @@ $html = '<a href="/download/studio/test.zip">最新版をダウンロード</a>'
 Assert ((Get-LatestPackageUrl -Html $html) -eq 'https://tyrano.jp/download/studio/test.zip') '最新版リンクの解析'
 Assert ((Resolve-ProjectSettings -Id 'my-game_2026' -Title '' -Directory '').Title -eq 'my-game_2026') '表示名のIDフォールバック'
 Assert ((Resolve-ProjectSettings -Id 'my-game_2026' -Title '' -Directory '').Directory -eq 'my-game_2026') 'ディレクトリー名のIDフォールバック'
+$emptyValuesAccepted = $false
+try {
+    New-TyranoProject -Id 'binding-test' -Title '' -Directory '' -ParentDirectory ([IO.Path]::GetTempPath()) -Progress { throw 'binding probe' } | Out-Null
+} catch { $emptyValuesAccepted = $_.Exception.Message -match 'binding probe' }
+Assert $emptyValuesAccepted '空欄のタイトル・ディレクトリー名を受け付けること'
 $invalidId = $false
 try { Resolve-ProjectSettings -Id 'my-game.test' -Title '' -Directory '' | Out-Null } catch { $invalidId = $true }
 Assert $invalidId 'IDの不正文字検証'
