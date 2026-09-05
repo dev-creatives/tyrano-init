@@ -148,8 +148,8 @@ function New-TyranoProject {
 
 function Start-Console {
     if ([string]::IsNullOrWhiteSpace($ProjectId)) { $ProjectId = Read-Host 'プロジェクトID（半角英数字・ハイフン・アンダースコア）' }
-    if ($null -eq $ProjectName) { $ProjectName = Read-Host 'ゲーム表示名（空欄でID）' }
-    if ($null -eq $DirectoryName) { $DirectoryName = Read-Host 'ディレクトリー名（空欄でID）' }
+    if ([string]::IsNullOrWhiteSpace($ProjectName)) { $ProjectName = Read-Host 'ゲーム表示名（空欄でID）' }
+    if ([string]::IsNullOrWhiteSpace($DirectoryName)) { $DirectoryName = Read-Host 'ディレクトリー名（空欄でID）' }
     if ([string]::IsNullOrWhiteSpace($Destination)) { $Destination = Read-Host '作成先フォルダー（空欄で現在のフォルダー）'; if ([string]::IsNullOrWhiteSpace($Destination)) { $Destination = (Get-Location).Path } }
     try {
         $result = New-TyranoProject -Id $ProjectId -Title $ProjectName -Directory $DirectoryName -ParentDirectory $Destination
