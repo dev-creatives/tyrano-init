@@ -22,12 +22,9 @@ Assert ($idControl[0].Text -eq 'my-game') 'GUIのプロジェクトID初期値'
 Assert ($form.AcceptButton -eq $createButton[0]) 'GUIのEnterキー実行設定'
 Assert ($idControl[0].Top -lt $directoryControl[0].Top) 'GUIのIDがディレクトリー名より上'
 Assert ($directoryControl[0].Top -lt $nameControl[0].Top) 'GUIのディレクトリー名がタイトルより上'
-Assert ($idControl[0].TabIndex -eq 0) 'GUIのIDのTabIndex'
-Assert ($directoryControl[0].TabIndex -eq 1) 'GUIのディレクトリー名のTabIndex'
-Assert ($nameControl[0].TabIndex -eq 2) 'GUIのタイトルのTabIndex'
-Assert ($destinationControl[0].TabIndex -eq 3) 'GUIの作成先のTabIndex'
-Assert ($browseButton[0].TabIndex -eq 4) 'GUIの参照ボタンのTabIndex'
-Assert ($createButton[0].TabIndex -eq 5) 'GUIの作成ボタンのTabIndex'
+$formSource = (Get-Command New-TyranoForm).ScriptBlock.ToString()
+Assert (-not ($formSource -match '\.TabIndex\s*=')) 'GUIでTabIndexを二重管理しないこと'
+Assert ($formSource -match 'AddRange\(@\(\$label1,\s*\$idBox,\s*\$label2,\s*\$directoryBox,\s*\$label3,\s*\$nameBox') 'GUIの追加順が画面順であること'
 $form.Dispose()
 
 $html = '<a href="/download/studio/test.zip">最新版をダウンロード</a>'

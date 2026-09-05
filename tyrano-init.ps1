@@ -172,16 +172,16 @@ function New-TyranoForm {
     $defaultDestination = $InitialDestination
     $form = New-Object Windows.Forms.Form; $form.Text = 'TyranoScript 初期セットアップ'; $form.Size = New-Object Drawing.Size(600, 350); $form.StartPosition = 'CenterScreen'
     $label1 = New-Object Windows.Forms.Label; $label1.Text = 'プロジェクトID'; $label1.Location = New-Object Drawing.Point(20, 22); $label1.AutoSize = $true
-    $idBox = New-Object Windows.Forms.TextBox; $idBox.Name = 'projectIdBox'; $idBox.Location = New-Object Drawing.Point(170, 18); $idBox.Width = 390; $idBox.Text = $InitialProjectId; $idBox.TabIndex = 0
+    $idBox = New-Object Windows.Forms.TextBox; $idBox.Name = 'projectIdBox'; $idBox.Location = New-Object Drawing.Point(170, 18); $idBox.Width = 390; $idBox.Text = $InitialProjectId
     $label2 = New-Object Windows.Forms.Label; $label2.Text = 'ディレクトリー名（空欄でID）'; $label2.Location = New-Object Drawing.Point(20, 62); $label2.AutoSize = $true
-    $directoryBox = New-Object Windows.Forms.TextBox; $directoryBox.Name = 'directoryNameBox'; $directoryBox.Location = New-Object Drawing.Point(170, 58); $directoryBox.Width = 390; $directoryBox.Text = $InitialDirectoryName; $directoryBox.TabIndex = 1
+    $directoryBox = New-Object Windows.Forms.TextBox; $directoryBox.Name = 'directoryNameBox'; $directoryBox.Location = New-Object Drawing.Point(170, 58); $directoryBox.Width = 390; $directoryBox.Text = $InitialDirectoryName
     $label3 = New-Object Windows.Forms.Label; $label3.Text = 'ゲーム表示名（空欄でID）'; $label3.Location = New-Object Drawing.Point(20, 102); $label3.AutoSize = $true
-    $nameBox = New-Object Windows.Forms.TextBox; $nameBox.Name = 'projectNameBox'; $nameBox.Location = New-Object Drawing.Point(170, 98); $nameBox.Width = 390; $nameBox.Text = $InitialProjectName; $nameBox.TabIndex = 2
+    $nameBox = New-Object Windows.Forms.TextBox; $nameBox.Name = 'projectNameBox'; $nameBox.Location = New-Object Drawing.Point(170, 98); $nameBox.Width = 390; $nameBox.Text = $InitialProjectName
     $label4 = New-Object Windows.Forms.Label; $label4.Text = '作成先フォルダー'; $label4.Location = New-Object Drawing.Point(20, 142); $label4.AutoSize = $true
-    $destBox = New-Object Windows.Forms.TextBox; $destBox.Name = 'destinationBox'; $destBox.Location = New-Object Drawing.Point(170, 138); $destBox.Width = 310; $destBox.Text = $defaultDestination; $destBox.TabIndex = 3
-    $browse = New-Object Windows.Forms.Button; $browse.Name = 'browseButton'; $browse.Text = '参照…'; $browse.Location = New-Object Drawing.Point(490, 136); $browse.TabIndex = 4; $browse.Add_Click({ $dialog = New-Object Windows.Forms.FolderBrowserDialog; if ($dialog.ShowDialog() -eq 'OK') { $destBox.Text = $dialog.SelectedPath } })
+    $destBox = New-Object Windows.Forms.TextBox; $destBox.Name = 'destinationBox'; $destBox.Location = New-Object Drawing.Point(170, 138); $destBox.Width = 310; $destBox.Text = $defaultDestination
+    $browse = New-Object Windows.Forms.Button; $browse.Name = 'browseButton'; $browse.Text = '参照…'; $browse.Location = New-Object Drawing.Point(490, 136); $browse.Add_Click({ $dialog = New-Object Windows.Forms.FolderBrowserDialog; if ($dialog.ShowDialog() -eq 'OK') { $destBox.Text = $dialog.SelectedPath } })
     $status = New-Object Windows.Forms.Label; $status.Text = '必要項目を入力してください。'; $status.Location = New-Object Drawing.Point(20, 185); $status.Size = New-Object Drawing.Size(540, 45)
-    $run = New-Object Windows.Forms.Button; $run.Name = 'createButton'; $run.Text = '作成'; $run.Location = New-Object Drawing.Point(450, 250); $run.Width = 110; $run.TabIndex = 5
+    $run = New-Object Windows.Forms.Button; $run.Name = 'createButton'; $run.Text = '作成'; $run.Location = New-Object Drawing.Point(450, 250); $run.Width = 110
     $run.Add_Click({ try { $run.Enabled = $false; $status.Text = '処理中…'; $result = New-TyranoProject -Id $idBox.Text -Title $nameBox.Text -Directory $directoryBox.Text -ParentDirectory $destBox.Text -Progress { param($m) $status.Text = $m; [Windows.Forms.Application]::DoEvents() }; [Windows.Forms.MessageBox]::Show("作成しました。`n$($result.Path)\index.html", '完了'); $form.Close() } catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'エラー', 'OK', 'Error') } finally { $run.Enabled = $true } })
     $form.AcceptButton = $run
     $form.Controls.AddRange(@($label1, $idBox, $label2, $directoryBox, $label3, $nameBox, $label4, $destBox, $browse, $status, $run))
