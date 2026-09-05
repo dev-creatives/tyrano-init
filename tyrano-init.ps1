@@ -250,6 +250,7 @@ function New-TyranoForm {
         [Parameter(Mandatory)][string]$InitialDestination,
         [switch]$Refresh,
         [scriptblock]$ProjectCreator = ${function:New-TyranoProject},
+        [hashtable]$ProjectOptions = @{},
         [scriptblock]$ShowMessage = {
             param($message, $title, $buttons, $icon)
             if ($null -eq $buttons) { return [Windows.Forms.MessageBox]::Show($message, $title) }
@@ -273,7 +274,7 @@ function New-TyranoForm {
     $browse.Add_Click({ param($sender, $eventArgs); $dialog = New-Object Windows.Forms.FolderBrowserDialog; if ($dialog.ShowDialog() -eq 'OK') { $form = $sender.FindForm(); @($form.Controls.Find('destinationBox', $true))[0].Text = $dialog.SelectedPath } })
     $status = New-Object Windows.Forms.Label; $status.Name = 'statusLabel'; $status.Text = '必要項目を入力してください。'; $status.Location = New-Object Drawing.Point(20, 185); $status.Size = New-Object Drawing.Size(540, 45)
     $run = New-Object Windows.Forms.Button; $run.Name = 'createButton'; $run.Text = '作成'; $run.Location = New-Object Drawing.Point(450, 250); $run.Width = 110
-    $form.Tag = [pscustomobject]@{ ProjectCreator = $ProjectCreator; ShowMessage = $ShowMessage; Refresh = [bool]$Refresh }
+    $form.Tag = [pscustomobject]@{ ProjectCreator = $ProjectCreator; ProjectOptions = $ProjectOptions; ShowMessage = $ShowMessage; Refresh = [bool]$Refresh }
     $runHandler = {
         param($sender, $eventArgs)
         $form = $sender.FindForm()
@@ -283,12 +284,13 @@ function New-TyranoForm {
         $destBox = @($form.Controls.Find('destinationBox', $true))[0]
         $status = @($form.Controls.Find('statusLabel', $true))[0]
         $projectCreator = $form.Tag.ProjectCreator
+        $projectOptions = $form.Tag.ProjectOptions
         $showMessage = $form.Tag.ShowMessage
         try {
             $sender.Enabled = $false
             $status.Text = '処理中…'
             $progress = { param($message) $status.Text = $message; [Windows.Forms.Application]::DoEvents() }.GetNewClosure()
-            $result = & $projectCreator -Id $idBox.Text -Title $nameBox.Text -Directory $directoryBox.Text -ParentDirectory $destBox.Text -Refresh:$form.Tag.Refresh -Progress $progress
+            $result = & $projectCreator -Id $idBox.Text -Title $nameBox.Text -Directory $directoryBox.Text -ParentDirectory $destBox.Text -Refresh:$form.Tag.Refresh -Progress $progress @projectOptions
             & $showMessage "作成しました。`n$($result.Path)\index.html" '完了'
             $form.Close()
         } catch {

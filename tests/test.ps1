@@ -112,6 +112,16 @@ try {
         Assert ($notifications[$notifications.Count - 1].Title -eq '完了') ('GUIの' + $mode + '操作で完了通知を表示すること')
         $guiForm.Dispose()
     }
+    $defaultGuiParent = Join-Path $tmp 'gui-default-output'
+    $defaultGuiOptions = @{ CacheDirectory = $cacheDirectory; GetDownloadPage = $getDownloadPage; DownloadPackage = $downloadPackage }
+    $defaultGuiForm = New-TyranoForm -InitialProjectId 'gui-default' -InitialProjectName 'GUI default' -InitialDirectoryName 'gui-default-directory' -InitialDestination $defaultGuiParent -ProjectOptions $defaultGuiOptions -ShowMessage $showMessage
+    $defaultGuiForm.Show()
+    [Windows.Forms.Application]::DoEvents()
+    $defaultGuiForm.AcceptButton.PerformClick()
+    $defaultGuiProject = Join-Path $defaultGuiParent 'gui-default-directory'
+    Assert (Test-Path -LiteralPath (Join-Path $defaultGuiProject 'index.html')) 'GUIが既定の作成関数でプロジェクトを作成すること'
+    Assert ($notifications[$notifications.Count - 1].Title -eq '完了') 'GUIが既定の作成関数で完了通知を表示すること'
+    $defaultGuiForm.Dispose()
     Assert ($downloadCount.Value -eq 2) 'CUIとGUIの統合テストでネットワークダウンロードを行わないこと'
 } finally {
     if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
