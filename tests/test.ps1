@@ -10,6 +10,8 @@ Assert ((Get-LatestPackageUrl -Html $html) -eq 'https://tyrano.jp/download/studi
 Assert ((Resolve-ProjectSettings -Id 'my-game_2026' -Title '' -Directory '').Title -eq 'my-game_2026') '表示名のIDフォールバック'
 Assert ((Resolve-ProjectSettings -Id 'my-game_2026' -Title '' -Directory '').Directory -eq 'my-game_2026') 'ディレクトリー名のIDフォールバック'
 Assert ((Get-TyranoCacheDirectory) -eq (Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)) 'tyrano-init\cache')) '既定のパッケージキャッシュ先'
+$packageSource = (Get-Command Get-TyranoPackage).ScriptBlock.ToString()
+Assert (-not ($packageSource -match '\$script:DownloadPage|\$script:UserAgent')) 'GUIイベントから実行してもダウンロード設定を解決できること'
 $invalidId = $false
 try { Resolve-ProjectSettings -Id 'my-game.test' -Title '' -Directory '' | Out-Null } catch { $invalidId = $true }
 Assert $invalidId 'IDの不正文字検証'

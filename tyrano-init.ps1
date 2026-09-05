@@ -10,11 +10,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$script:DownloadPage = 'https://tyrano.jp/dl/v6'
-$script:UserAgent = 'tyrano-init/1.0'
-
 function Get-LatestPackageUrl {
-    param([string]$Html, [string]$PageUrl = $script:DownloadPage)
+    param([string]$Html, [string]$PageUrl = 'https://tyrano.jp/dl/v6')
 
     # The official page labels the current package with 最新版. Keep parsing
     # deliberately narrow so an old-version link is never selected by mistake.
@@ -75,11 +72,13 @@ function Get-TyranoPackage {
         [scriptblock]$GetDownloadPage,
         [scriptblock]$DownloadPackage
     )
+    $downloadPageUrl = 'https://tyrano.jp/dl/v6'
+    $userAgent = 'tyrano-init/1.0'
     if ($null -eq $GetDownloadPage) {
-        $GetDownloadPage = { Invoke-WebRequest -Uri $script:DownloadPage -UseBasicParsing -UserAgent $script:UserAgent }.GetNewClosure()
+        $GetDownloadPage = { Invoke-WebRequest -Uri $downloadPageUrl -UseBasicParsing -UserAgent $userAgent }.GetNewClosure()
     }
     if ($null -eq $DownloadPackage) {
-        $DownloadPackage = { param($url, $path) Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing -UserAgent $script:UserAgent }.GetNewClosure()
+        $DownloadPackage = { param($url, $path) Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing -UserAgent $userAgent }.GetNewClosure()
     }
 
     & $Progress '公式ページから最新版の情報を取得しています…'
