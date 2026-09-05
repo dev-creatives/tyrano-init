@@ -178,7 +178,7 @@ function Start-Gui {
     $run = New-Object Windows.Forms.Button; $run.Text = '作成'; $run.Location = New-Object Drawing.Point(450, 250); $run.Width = 110
     $run.Add_Click({ try { $run.Enabled = $false; $status.Text = '処理中…'; $result = New-TyranoProject -Id $idBox.Text -Title $nameBox.Text -Directory $directoryBox.Text -ParentDirectory $destBox.Text -Progress { param($m) $status.Text = $m; [Windows.Forms.Application]::DoEvents() }; [Windows.Forms.MessageBox]::Show("作成しました。`n$($result.Path)\index.html", '完了'); $form.Close() } catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'エラー', 'OK', 'Error') } finally { $run.Enabled = $true } })
     $form.AcceptButton = $run
-    $form.Controls.AddRange(@($label1, $nameBox, $label2, $destBox, $browse, $status, $run)); [Windows.Forms.Application]::Run($form)
+    $form.Controls.AddRange(@($label1, $idBox, $label2, $nameBox, $label3, $directoryBox, $label4, $destBox, $browse, $status, $run)); [Windows.Forms.Application]::Run($form)
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
