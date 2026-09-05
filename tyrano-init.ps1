@@ -173,10 +173,10 @@ function New-TyranoForm {
     $form = New-Object Windows.Forms.Form; $form.Text = 'TyranoScript 初期セットアップ'; $form.Size = New-Object Drawing.Size(600, 350); $form.StartPosition = 'CenterScreen'
     $label1 = New-Object Windows.Forms.Label; $label1.Text = 'プロジェクトID'; $label1.Location = New-Object Drawing.Point(20, 22); $label1.AutoSize = $true
     $idBox = New-Object Windows.Forms.TextBox; $idBox.Name = 'projectIdBox'; $idBox.Location = New-Object Drawing.Point(170, 18); $idBox.Width = 390; $idBox.Text = $InitialProjectId
-    $label2 = New-Object Windows.Forms.Label; $label2.Text = 'ゲーム表示名（空欄でID）'; $label2.Location = New-Object Drawing.Point(20, 62); $label2.AutoSize = $true
-    $nameBox = New-Object Windows.Forms.TextBox; $nameBox.Name = 'projectNameBox'; $nameBox.Location = New-Object Drawing.Point(170, 58); $nameBox.Width = 390; $nameBox.Text = $InitialProjectName
-    $label3 = New-Object Windows.Forms.Label; $label3.Text = 'ディレクトリー名（空欄でID）'; $label3.Location = New-Object Drawing.Point(20, 102); $label3.AutoSize = $true
-    $directoryBox = New-Object Windows.Forms.TextBox; $directoryBox.Name = 'directoryNameBox'; $directoryBox.Location = New-Object Drawing.Point(170, 98); $directoryBox.Width = 390; $directoryBox.Text = $InitialDirectoryName
+    $label2 = New-Object Windows.Forms.Label; $label2.Text = 'ディレクトリー名（空欄でID）'; $label2.Location = New-Object Drawing.Point(20, 62); $label2.AutoSize = $true
+    $directoryBox = New-Object Windows.Forms.TextBox; $directoryBox.Name = 'directoryNameBox'; $directoryBox.Location = New-Object Drawing.Point(170, 58); $directoryBox.Width = 390; $directoryBox.Text = $InitialDirectoryName
+    $label3 = New-Object Windows.Forms.Label; $label3.Text = 'ゲーム表示名（空欄でID）'; $label3.Location = New-Object Drawing.Point(20, 102); $label3.AutoSize = $true
+    $nameBox = New-Object Windows.Forms.TextBox; $nameBox.Name = 'projectNameBox'; $nameBox.Location = New-Object Drawing.Point(170, 98); $nameBox.Width = 390; $nameBox.Text = $InitialProjectName
     $label4 = New-Object Windows.Forms.Label; $label4.Text = '作成先フォルダー'; $label4.Location = New-Object Drawing.Point(20, 142); $label4.AutoSize = $true
     $destBox = New-Object Windows.Forms.TextBox; $destBox.Name = 'destinationBox'; $destBox.Location = New-Object Drawing.Point(170, 138); $destBox.Width = 310; $destBox.Text = $defaultDestination
     $browse = New-Object Windows.Forms.Button; $browse.Text = '参照…'; $browse.Location = New-Object Drawing.Point(490, 136); $browse.Add_Click({ $dialog = New-Object Windows.Forms.FolderBrowserDialog; if ($dialog.ShowDialog() -eq 'OK') { $destBox.Text = $dialog.SelectedPath } })

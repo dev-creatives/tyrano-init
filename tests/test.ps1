@@ -18,6 +18,8 @@ Assert ($destinationControl.Count -eq 1) 'GUIの作成先入力欄'
 Assert ($createButton.Count -eq 1) 'GUIの作成ボタン'
 Assert ($idControl[0].Text -eq 'my-game') 'GUIのプロジェクトID初期値'
 Assert ($form.AcceptButton -eq $createButton[0]) 'GUIのEnterキー実行設定'
+Assert ($idControl[0].Top -lt $directoryControl[0].Top) 'GUIのIDがディレクトリー名より上'
+Assert ($directoryControl[0].Top -lt $nameControl[0].Top) 'GUIのディレクトリー名がタイトルより上'
 $form.Dispose()
 
 $html = '<a href="/download/studio/test.zip">最新版をダウンロード</a>'
