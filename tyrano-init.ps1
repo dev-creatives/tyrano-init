@@ -117,7 +117,8 @@ function Start-Gui {
     $browse = New-Object Windows.Forms.Button; $browse.Text = '参照…'; $browse.Location = New-Object Drawing.Point(440, 56); $browse.Add_Click({ $dialog = New-Object Windows.Forms.FolderBrowserDialog; if ($dialog.ShowDialog() -eq 'OK') { $destBox.Text = $dialog.SelectedPath } })
     $status = New-Object Windows.Forms.Label; $status.Text = 'プロジェクト名と作成先を入力してください。'; $status.Location = New-Object Drawing.Point(20, 105); $status.Size = New-Object Drawing.Size(500, 45)
     $run = New-Object Windows.Forms.Button; $run.Text = '作成'; $run.Location = New-Object Drawing.Point(400, 165); $run.Width = 110
-    $run.Add_Click({ try { $run.Enabled = $false; $status.Text = '処理中…'; $result = New-TyranoProject -Name $nameBox.Text -ParentDirectory $destBox.Text -Progress { param($m) $status.Text = $m; [Windows.Forms.Application]::DoEvents() }; [Windows.Forms.MessageBox]::Show("作成しました。`n$($result.Path)\index.html", '完了'); $status.Text = '完了しました。' } catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'エラー', 'OK', 'Error') } finally { $run.Enabled = $true } })
+    $run.Add_Click({ try { $run.Enabled = $false; $status.Text = '処理中…'; $result = New-TyranoProject -Name $nameBox.Text -ParentDirectory $destBox.Text -Progress { param($m) $status.Text = $m; [Windows.Forms.Application]::DoEvents() }; [Windows.Forms.MessageBox]::Show("作成しました。`n$($result.Path)\index.html", '完了'); $form.Close() } catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'エラー', 'OK', 'Error') } finally { $run.Enabled = $true } })
+    $form.AcceptButton = $run
     $form.Controls.AddRange(@($label1, $nameBox, $label2, $destBox, $browse, $status, $run)); [Windows.Forms.Application]::Run($form)
 }
 
