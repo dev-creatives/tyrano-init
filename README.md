@@ -8,8 +8,14 @@ TyranoScript V6 の新規プロジェクトを自動作成する Windows PowerSh
 
 ```powershell
 .\tyrano-init.ps1
+```
+```powershell
 .\tyrano-init.ps1 -ProjectId my-novel_2026 -ProjectName '私のノベル' -Destination 'C:\Games'
+```
+```powershell
 .\tyrano-init.ps1 -Gui
+```
+```powershell
 .\tyrano-init.ps1 -Console
 ```
 
