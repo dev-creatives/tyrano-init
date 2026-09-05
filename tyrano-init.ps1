@@ -2,7 +2,8 @@
 param(
     [string]$ProjectName,
     [string]$Destination,
-    [switch]$Gui
+    [switch]$Gui,
+    [switch]$Console
 )
 
 $ErrorActionPreference = 'Stop'
@@ -118,4 +119,10 @@ function Start-Gui {
     $form.Controls.AddRange(@($label1, $nameBox, $label2, $destBox, $browse, $status, $run)); [Windows.Forms.Application]::Run($form)
 }
 
-if ($MyInvocation.InvocationName -ne '.') { if ($Gui) { Start-Gui } else { exit (Start-Console) } }
+if ($MyInvocation.InvocationName -ne '.') {
+    # Explorer's "Run with PowerShell" supplies no reliable marker that can
+    # be distinguished from a terminal launch. No-argument launches therefore
+    # open the GUI; use -Console for interactive text mode.
+    if ($Gui -or (-not $Console -and [string]::IsNullOrWhiteSpace($ProjectName) -and [string]::IsNullOrWhiteSpace($Destination))) { Start-Gui }
+    else { exit (Start-Console) }
+}
